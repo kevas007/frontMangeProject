@@ -5,6 +5,20 @@ export interface Project {
   description: string
   deadline: string | null
   state_id: number
+  state: Record<string, any>
+  users: any[]
+  created_at: string | null
+  updated_at: string | null
+}
+export interface ShowProject {
+  // columns
+  id: number
+  name: string
+  description: string
+  deadline: string | null
+  state_id: number
+  state: Record<string, any>
+  users: any[]
   created_at: string | null
   updated_at: string | null
 }
