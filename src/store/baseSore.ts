@@ -212,7 +212,6 @@ export const baseStore = defineStore('baseStore', {
         )
 
         // 3. Recharge le projet pour voir les changements
-        await this.getProject(id)
       } catch (error) {
         console.error('Erreur updateProject:', error)
         throw error
@@ -231,6 +230,38 @@ export const baseStore = defineStore('baseStore', {
         })
       } catch (error) {
         console.error('Erreur updateProject:', error)
+        throw error
+      }
+    },
+    async createProject(data: {
+      name: string
+      description: string
+      deadline: string
+      users: number[] // IDs
+      state_id: number
+    }) {
+      this.getToken()
+
+      try {
+        // 1. Mise à jour du projet
+        await axios.post(
+          `http://localhost:8000/api/v1/project`,
+          {
+            name: data.name,
+            description: data.description,
+            deadline: data.deadline,
+            state_id: data.state_id,
+            ...(data.users?.length ? { users: data.users } : {}), // n’envoie que si non vide
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${this.token}`,
+            },
+          },
+        )
+      } catch (error) {
+        console.error('createv:', error)
         throw error
       }
     },

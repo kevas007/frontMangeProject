@@ -1,119 +1,209 @@
 <template>
-  <v-container>
-    <v-btn color="success" variant="elevated" prepend-icon="mdi-plus" class="mb-4" @click="ajouter">
-      Ajouter
-    </v-btn>
-
-    <v-row v-if="store.projects.length">
-      <v-col v-for="project in store.projects" :key="project.id" cols="12" sm="6" md="4" lg="3">
-        <v-card class="pa-3">
-          <!-- Barre colorée en haut -->
+  <v-container fluid class="kanban-board">
+    <v-row>
+      <v-col v-for="state in store.states" :key="state.id" cols="12" sm="6" md="4" lg="3">
+        <div class="kanban-column">
           <div
-            :style="`height: 6px; width: 100%; background-color: ${getStateColor(project.state.name)}; border-radius: 4px 4px 0 0;`"
-          ></div>
+            class="kanban-header"
+            :class="getStateColorClass(state.name)"
+            style="position: relative"
+          >
+            {{ state.name }}
+            <div><Add :state="state" @created="store.getAllProjects" /></div>
+          </div>
 
-          <v-card-title>{{ project.name }}</v-card-title>
-
-          <v-card-text class="flex-grow-1">
-            <!-- Utilisateurs -->
-            <div v-if="project.users && project.users.length">
-              <p class="text-subtitle-2 font-weight-medium mb-2">Utilisateurs :</p>
-              <ul class="pl-2">
-                <li v-for="user in project.users" :key="user.id">
-                  <span class="text-blue font-italic">{{ user.name }}</span>
-                </li>
-              </ul>
-            </div>
-            <div v-else class="mb-3">
-              <em class="text-grey">Aucun utilisateur assigné</em>
-            </div>
-
-            <!-- État + Deadline -->
-            <div class="mt-4">
-              <p><strong>État :</strong> {{ project.state.name }}</p>
-              <p><strong>Deadline :</strong> {{ formatDate(project.deadline) }}</p>
-            </div>
-          </v-card-text>
-
-          <v-card-actions class="d-flex justify-space-between">
-            <v-btn color="primary" @click="store.getProject(project.id)">Show</v-btn>
-            <v-btn color="error" @click="openDialog(project.id)">Delete</v-btn>
-          </v-card-actions>
-        </v-card>
+          <draggable
+            :list="projectsByState(state.id)"
+            :group="{ name: 'projects', pull: true, put: true }"
+            class="kanban-dropzone"
+            item-key="id"
+            @change="(event) => onDrop(event, state)"
+          >
+            <template #item="{ element: project }">
+              <div class="kanban-card" :class="{ dragging: draggingId === project.id }">
+                <div class="kanban-card-title">{{ project.name }}</div>
+                <div class="kanban-card-description">{{ project.description }}</div>
+              </div>
+            </template>
+          </draggable>
+        </div>
       </v-col>
     </v-row>
 
-    <div v-else class="text-center mt-10">
-      <em>Aucun projet pour le moment.</em>
-    </div>
+    <!-- Loader -->
+    <v-overlay :model-value="isLoading" class="d-flex justify-center align-center" persistent>
+      <v-progress-circular indeterminate color="primary" size="64" />
+    </v-overlay>
 
-    <!-- Dialogue de confirmation -->
-    <v-dialog v-model="dialog" max-width="400">
-      <v-card>
-        <v-card-title>Confirmer la suppression</v-card-title>
-        <v-card-text> Êtes-vous sûr de vouloir supprimer ce projet ? </v-card-text>
-        <v-card-actions class="justify-end">
-          <v-btn variant="text" @click="dialog = false">Annuler</v-btn>
-          <v-btn color="error" variant="elevated" @click="confirmDelete">Supprimer</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <!-- Toast -->
+    <v-snackbar v-model="showSnackbar" :color="snackbarColor" timeout="3000">
+      {{ snackbarMessage }}
+    </v-snackbar>
   </v-container>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import draggable from 'vuedraggable'
 import { baseStore } from '@/store/baseSore'
-import router from '@/router'
+import Add from '@/components/project/Add.vue'
 
 const store = baseStore()
-const dialog = ref(false)
-const selectedProjectId = ref<number | null>(null)
 
-onMounted(() => {
-  store.getAllProjects()
+const isLoading = ref(false)
+const showSnackbar = ref(false)
+const snackbarMessage = ref('')
+const snackbarColor = ref('success')
+const draggingId = ref<number | null>(null)
+
+onMounted(async () => {
+  await store.allState()
+  await store.getAllProjects()
 })
 
-function ajouter() {
-  router.push('/ajouter')
+function projectsByState(stateId: number) {
+  return store.projects.filter((p) => p.state_id === stateId)
 }
 
-function openDialog(id: number) {
-  selectedProjectId.value = id
-  dialog.value = true
-}
+async function onDrop(event: any, newState: any) {
+  const movedProject = event.added?.element || event.moved?.element || event.removed?.element
 
-function confirmDelete() {
-  if (selectedProjectId.value !== null) {
-    store.deleteProject(selectedProjectId.value)
+  console.log('📦 movedProject:', movedProject)
+  console.log('📦 newState:', newState)
+
+  if (!movedProject || !movedProject.id || !newState?.id) {
+    console.warn('❌ Données manquantes dans onDrop')
+    showSnackbar.value = true
+    snackbarMessage.value = 'Erreur : données manquantes.'
+    snackbarColor.value = 'error'
+    return
   }
-  dialog.value = false
+
+  if (movedProject.state_id !== newState.id) {
+    try {
+      isLoading.value = true
+      draggingId.value = movedProject.id
+
+      await store.updateProject(movedProject.id, {
+        name: movedProject.name,
+        description: movedProject.description,
+        deadline: movedProject.deadline,
+        users: movedProject.users?.map((u: any) => u.id) || [],
+        state_id: newState.id,
+      })
+
+      await store.getAllProjects()
+
+      snackbarMessage.value = `Projet déplacé vers "${newState.name}"`
+      snackbarColor.value = 'success'
+    } catch (error) {
+      console.error('❌ Erreur lors du drag & drop :', error)
+      snackbarMessage.value = 'Erreur lors de la mise à jour du projet.'
+      snackbarColor.value = 'error'
+    } finally {
+      showSnackbar.value = true
+      isLoading.value = false
+      draggingId.value = null
+    }
+  }
 }
-function formatDate(dateString: string | null) {
-  if (!dateString) return 'Aucune'
-  return new Date(dateString).toLocaleDateString('fr-FR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-}
-function getStateColor(stateName: string): string {
+
+function getStateColorClass(stateName: string): string {
   switch (stateName.toLowerCase()) {
     case 'initiation du projet':
-      return 'grey'
+      return 'state-grey'
     case 'planification':
-      return 'blue'
+      return 'state-blue'
     case 'exécution':
-      return 'green'
-    case 'annulé':
-      return 'red'
+      return 'state-green'
     case 'suivi et contrôle':
-      return 'pink'
+      return 'state-pink'
     case 'clôture du projet':
-      return 'orange'
+      return 'state-orange'
+    case 'annulé':
+      return 'state-red'
     default:
-      return 'primary'
+      return 'state-default'
   }
 }
-
 </script>
+
+<style scoped>
+.kanban-board {
+  background-color: #121212;
+  padding: 20px;
+  min-height: 100vh;
+}
+.kanban-column {
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 400px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+.kanban-header {
+  font-weight: bold;
+  text-align: center;
+  padding: 10px;
+  border-radius: 6px;
+  color: white;
+  margin-bottom: 12px;
+}
+.kanban-dropzone {
+  min-height: 200px;
+  padding: 8px;
+  border-radius: 6px;
+  background-color: #fafafa;
+  transition:
+    background-color 0.2s ease,
+    border 0.2s ease;
+  border: 2px solid transparent;
+}
+.kanban-card {
+  background-color: white;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+  cursor: grab;
+}
+.kanban-card.dragging {
+  transform: scale(1.05);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  opacity: 0.85;
+}
+.kanban-card-title {
+  font-weight: bold;
+  margin-bottom: 4px;
+  font-size: larger;
+  color: #121212;
+}
+.kanban-card-description {
+  font-size: 0.875rem;
+  color: #666;
+}
+.state-grey {
+  background-color: #9e9e9e;
+}
+.state-blue {
+  background-color: #2196f3;
+}
+.state-green {
+  background-color: #4caf50;
+}
+.state-pink {
+  background-color: #e91e63;
+}
+.state-orange {
+  background-color: #ff9800;
+}
+.state-red {
+  background-color: #f44336;
+}
+.state-default {
+  background-color: #607d8b;
+}
+</style>

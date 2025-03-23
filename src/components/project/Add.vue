@@ -1,40 +1,83 @@
 <template>
-  <v-container fluid class="pa-0 d-flex align-center justify-center" style="height: 100vh">
-    <v-card class="d-flex flex-column" style="width: 100vw; height: 100vh; border-radius: 0">
-      <v-card-title class="text-h4 text-truncate">
-        {{ store.projects[0]?.name || 'Chargement...' }}
-      </v-card-title>
+  <div class="add-project">
+    <v-btn icon size="small" color="white" @click="showModal = true">
+      <v-icon>mdi-plus</v-icon>
+    </v-btn>
 
-      <v-card-subtitle class="text-subtitle-1 text-grey">
-        {{ store.projects[0]?.description || 'Pas de description' }}
-      </v-card-subtitle>
-
-      <v-card-text class="flex-grow-1 overflow-auto" style="font-size: 1.2rem; padding: 16px">
-        <div v-if="store.projects[0]?.users?.length">
-          <div v-for="user in store.projects[0].users" :key="user.id" class="mb-2">
-            <span class="text-blue font-italic">{{ user.name }}</span>
-          </div>
-        </div>
-        <div v-else>
-          <em class="text-grey">Aucun utilisateur assigné</em>
-        </div>
-      </v-card-text>
-
-      <v-card-actions class="pa-4 d-flex justify-end">
-        <v-btn color="primary">Modifier</v-btn>
-        <v-btn color="error" class="ml-2">Supprimer</v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-container>
+    <v-dialog v-model="showModal" max-width="600">
+      <v-card>
+        <v-card-title>Créer un projet</v-card-title>
+        <v-card-text>
+          <v-text-field label="Nom" v-model="newProject.name" />
+          <v-textarea label="Description" v-model="newProject.description" />
+          <v-text-field label="Deadline" v-model="newProject.deadline" type="datetime-local" />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn text @click="showModal = false">Annuler</v-btn>
+          <v-btn color="primary" :loading="isCreating" @click="createProject">Créer</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </div>
 </template>
 
-<script setup>
-import { onMounted } from 'vue'
+<script setup lang="ts">
+import { ref } from 'vue'
 import { baseStore } from '@/store/baseSore'
 
 const store = baseStore()
+const emit = defineEmits(['created'])
 
-onMounted(() => {
-  store.getAllProjects()
+const props = defineProps<{
+  state: { id: number; name: string }
+}>()
+
+const showModal = ref(false)
+const isCreating = ref(false)
+
+const newProject = ref({
+  name: '',
+  description: '',
+  deadline: '',
 })
+
+async function createProject() {
+  if (!newProject.value.name || !props.state?.id || !newProject.value.deadline) {
+    alert('Veuillez remplir tous les champs.')
+    return
+  }
+
+  try {
+    isCreating.value = true
+
+    // Corrige le format du datetime pour correspondre à ce que l’API attend
+    const formattedDeadline = newProject.value.deadline.replace('T', ' ') + ':00'
+
+    await store.createProject({
+      name: newProject.value.name,
+      description: newProject.value.description,
+      deadline: formattedDeadline,
+      state_id: props.state.id,
+      users: [],
+    })
+
+    emit('created')
+    showModal.value = false
+    newProject.value = { name: '', description: '', deadline: '' }
+  } catch (err) {
+    console.error('❌ Erreur création projet:', err)
+    alert('Erreur lors de la création du projet.')
+  } finally {
+    isCreating.value = false
+  }
+}
 </script>
+
+<style scoped>
+.add-project {
+  position: absolute;
+  top: 2px;
+  right: 8px;
+}
+</style>

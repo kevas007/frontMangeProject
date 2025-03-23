@@ -36,6 +36,7 @@ const vuetify = createVuetify({
 
 const pinia = createPinia()
 const app = createApp(App)
+
 pinia.use(piniaPluginPersistedstate)
 
 app.use(pinia)

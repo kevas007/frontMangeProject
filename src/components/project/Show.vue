@@ -54,8 +54,8 @@
               text-color="white"
               class="ma-2"
             >
-              
-            {{ getStateEmoji(store.currentProject.state?.name || '') }} État : {{ store.currentProject.state?.name || 'Non défini' }}
+              {{ getStateEmoji(store.currentProject.state?.name || '') }} État :
+              {{ store.currentProject.state?.name || 'Non défini' }}
             </v-chip>
           </template>
         </v-card-subtitle>
@@ -284,7 +284,6 @@ function getStateEmoji(stateName: string): string {
       return '❔'
   }
 }
-
 </script>
 
 <style scoped>
