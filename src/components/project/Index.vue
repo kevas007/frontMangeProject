@@ -11,6 +11,12 @@
             {{ state.name }}
             <div><Add :state="state" @created="store.getAllProjects" /></div>
           </div>
+          <Show
+            v-if="selectedProjectId"
+            v-model="showProjectModal"
+            :id="selectedProjectId"
+            @updated="store.getAllProjects"
+          />
 
           <draggable
             :list="projectsByState(state.id)"
@@ -20,7 +26,11 @@
             @change="(event) => onDrop(event, state)"
           >
             <template #item="{ element: project }">
-              <div class="kanban-card" :class="{ dragging: draggingId === project.id }">
+              <div
+                class="kanban-card"
+                :class="{ dragging: draggingId === project.id }"
+                @dblclick="openProject(project.id)"
+              >
                 <div class="kanban-card-title">{{ project.name }}</div>
                 <div class="kanban-card-description">{{ project.description }}</div>
               </div>
@@ -55,7 +65,15 @@ const showSnackbar = ref(false)
 const snackbarMessage = ref('')
 const snackbarColor = ref('success')
 const draggingId = ref<number | null>(null)
+import Show from '@/components/project/Show.vue'
 
+const selectedProjectId = ref<number | null>(null)
+const showProjectModal = ref(false)
+
+function openProject(id: number) {
+  selectedProjectId.value = id
+  showProjectModal.value = true
+}
 onMounted(async () => {
   await store.allState()
   await store.getAllProjects()

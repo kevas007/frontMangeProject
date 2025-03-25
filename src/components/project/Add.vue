@@ -1,6 +1,6 @@
 <template>
   <div class="add-project">
-    <v-btn icon size="small" color="white" @click="showModal = true">
+    <v-btn icon size="small" color="white" @click="openModal">
       <v-icon>mdi-plus</v-icon>
     </v-btn>
 
@@ -11,6 +11,18 @@
           <v-text-field label="Nom" v-model="newProject.name" />
           <v-textarea label="Description" v-model="newProject.description" />
           <v-text-field label="Deadline" v-model="newProject.deadline" type="datetime-local" />
+
+          <!-- Sélecteur multi-utilisateurs -->
+          <v-select
+            v-model="selectedUsers"
+            :items="usersList"
+            item-title="name"
+            item-value="id"
+            label="Utilisateurs assignés"
+            multiple
+            chips
+            clearable
+          />
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -23,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { baseStore } from '@/store/baseSore'
 
 const store = baseStore()
@@ -42,6 +54,29 @@ const newProject = ref({
   deadline: '',
 })
 
+const usersList = ref<{ id: number; name: string }[]>([])
+const selectedUsers = ref<number[]>([])
+
+async function openModal() {
+  showModal.value = true
+  await fetchUsers()
+}
+
+async function fetchUsers() {
+  try {
+    const res = await fetch('http://localhost:8000/api/v1/users', {
+      headers: {
+        Authorization: `Bearer ${store.token}`,
+        Accept: 'application/json',
+      },
+    })
+    const data = await res.json()
+    usersList.value = data.data // adapte si ta structure diffère
+  } catch (e) {
+    console.error('Erreur chargement utilisateurs', e)
+  }
+}
+
 async function createProject() {
   if (!newProject.value.name || !props.state?.id || !newProject.value.deadline) {
     alert('Veuillez remplir tous les champs.')
@@ -51,7 +86,6 @@ async function createProject() {
   try {
     isCreating.value = true
 
-    // Corrige le format du datetime pour correspondre à ce que l’API attend
     const formattedDeadline = newProject.value.deadline.replace('T', ' ') + ':00'
 
     await store.createProject({
@@ -59,11 +93,12 @@ async function createProject() {
       description: newProject.value.description,
       deadline: formattedDeadline,
       state_id: props.state.id,
-      users: [],
+      users: selectedUsers.value,
     })
 
     emit('created')
     showModal.value = false
+    selectedUsers.value = []
     newProject.value = { name: '', description: '', deadline: '' }
   } catch (err) {
     console.error('❌ Erreur création projet:', err)

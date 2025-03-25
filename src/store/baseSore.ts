@@ -3,6 +3,8 @@ import axios from 'axios'
 import { type Project, type UserLogin, type User, type ShowProject, type State } from '@/type'
 import router from '@/router' // Assurez-vous que le chemin est correct
 
+
+
 export const baseStore = defineStore('baseStore', {
   state: () => ({
     token: null as string | null,
@@ -14,7 +16,7 @@ export const baseStore = defineStore('baseStore', {
     } as UserLogin,
     user: null as User | null,
     currentProject: null as ShowProject | null,
-    states: null as State | null,
+    states: null as State | any,
   }),
 
   actions: {
@@ -69,7 +71,6 @@ export const baseStore = defineStore('baseStore', {
 
         this.currentProject = response.data.data // Crée une variable dédiée au projet
         console.log(this.currentProject)
-        router.push(`/projects/${id}`)
       } catch (error: any) {
         console.error('Erreur lors de la récupération du projet :', error)
         alert(error.response?.data?.message || 'Échec de la récupération du projet.')
